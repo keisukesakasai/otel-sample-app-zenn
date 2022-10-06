@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
+
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -72,13 +74,17 @@ func main() {
 	}()
 
 	r := gin.New()
-	r.POST("/sample", sample1)
+	r.Use(otelgin.Middleware("sample"))
+	r.GET("/sample", sample1)
+
+	r.Run(":8080")
 
 }
 
 func sample1(c *gin.Context) {
 	_, span := tracer.Start(c.Request.Context(), "sample1")
 	time.Sleep(time.Second * 1)
+	log.Println("sample1 done.")
 
 	sample2(c)
 
@@ -86,8 +92,9 @@ func sample1(c *gin.Context) {
 }
 
 func sample2(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "sample1")
+	_, span := tracer.Start(c.Request.Context(), "sample2")
 	time.Sleep(time.Second * 2)
+	log.Println("sample2 done.")
 
 	sample3(c)
 
@@ -95,8 +102,9 @@ func sample2(c *gin.Context) {
 }
 
 func sample3(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "sample1")
+	_, span := tracer.Start(c.Request.Context(), "sample3")
 	time.Sleep(time.Second * 3)
+	log.Println("sample3 done.")
 
 	span.End()
 }
