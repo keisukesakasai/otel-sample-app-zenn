@@ -106,5 +106,3 @@ func sample3(c *gin.Context) {
 
 	span.End()
 }
-
-// for Zenn
