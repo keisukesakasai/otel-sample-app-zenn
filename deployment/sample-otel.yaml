@@ -1,0 +1,25 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: sample
+  namespace: sample
+spec:
+  image: public.ecr.aws/aws-observability/aws-otel-collector:v0.17.0
+  mode: deployment
+  serviceAccount: sample
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4318"
+    processors:
+    exporters:
+      awsxray:
+        region: ap-northeast-1
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: []
+          exporters: [awsxray]

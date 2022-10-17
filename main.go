@@ -11,14 +11,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func initProvider() (func(context.Context) error, error) {
@@ -33,7 +36,21 @@ func initProvider() (func(context.Context) error, error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	conn, err := grpc.DialContext(ctx, "sample-collector.observability.svc.cluster.local:4318", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	/*
+		traceExporter, _ := stdouttrace.New(
+			stdouttrace.WithPrettyPrint(),
+			stdouttrace.WithWriter(os.Stderr),
+			// stdouttrace.WithWriter(io.Discard),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create trace exporter: %w", err)
+		}
+	*/
+
+	conn, err := grpc.DialContext(ctx, 
+		"opentelemetry-collector-collector.opentelemetry.svc.cluster.local:4318", 
+		grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
 	}
@@ -79,32 +96,84 @@ func main() {
 
 }
 
+func Logger(c *gin.Context, msg string) {
+	start := time.Now()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer logger.Sync()
+	logger.Info("Logger",
+		zap.Int("status", c.Writer.Status()),
+		zap.String("method", c.Request.Method),
+		zap.String("path", c.Request.URL.Path),
+		zap.String("query", c.Request.URL.RawQuery),
+		zap.String("ip", c.ClientIP()),
+		zap.String("user-agent", c.Request.UserAgent()),
+		zap.String("errors", c.Errors.ByType(gin.ErrorTypePrivate).String()),
+		zap.Duration("elapsed", time.Since(start)),
+		zap.String("message", msg),
+	)
+}
+
+func LoggerAndCreateSpan(c *gin.Context, msg string) trace.Span {
+	_, span := tracer.Start(c.Request.Context(), msg)
+
+	// SpanId := IdOtel2Xray(span.SpanContext().SpanID().String())
+	// TraceId := IdOtel2Xray(span.SpanContext().TraceID().String())
+
+	SpanId := span.SpanContext().SpanID().String()
+	TraceId := span.SpanContext().TraceID().String()
+
+	span.SetAttributes(
+		attribute.Int("status", c.Writer.Status()),
+		attribute.String("method", c.Request.Method),
+		attribute.String("client_ip", c.ClientIP()),
+		attribute.String("message", msg),
+		attribute.String("span_id", SpanId),
+		attribute.String("trace_id", TraceId),
+	)
+
+	start := time.Now()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer logger.Sync()
+	logger.Info("Logger",
+		zap.Int("status", c.Writer.Status()),
+		zap.String("method", c.Request.Method),
+		zap.String("path", c.Request.URL.Path),
+		zap.String("query", c.Request.URL.RawQuery),
+		zap.String("ip", c.ClientIP()),
+		zap.String("user-agent", c.Request.UserAgent()),
+		zap.String("errors", c.Errors.ByType(gin.ErrorTypePrivate).String()),
+		zap.Duration("elapsed", time.Since(start)),
+		zap.String("message", msg),
+		zap.String("span_id", TraceId),
+		zap.String("trace_id", SpanId),
+	)
+
+	return span
+}
+
 func sample1(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "sample1")
+	defer LoggerAndCreateSpan(c, "sample1 を実行").End()
 	time.Sleep(time.Second * 1)
-	log.Println("sample1 done.")
-
 	sample2(c)
-
-	span.End()
 }
 
 func sample2(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "sample2")
+	defer LoggerAndCreateSpan(c, "sample2 を実行").End()
 	time.Sleep(time.Second * 2)
-	log.Println("sample2 done.")
-
 	sample3(c)
-
-	span.End()
 }
 
 func sample3(c *gin.Context) {
-	_, span := tracer.Start(c.Request.Context(), "sample3")
+	defer LoggerAndCreateSpan(c, "sample3 を実行").End()
 	time.Sleep(time.Second * 3)
-	log.Println("sample3 done.")
-
-	span.End()
 }
 
 // for zenn.
