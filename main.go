@@ -36,21 +36,10 @@ func initProvider() (func(context.Context) error, error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	/*
-		traceExporter, _ := stdouttrace.New(
-			stdouttrace.WithPrettyPrint(),
-			stdouttrace.WithWriter(os.Stderr),
-			// stdouttrace.WithWriter(io.Discard),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create trace exporter: %w", err)
-		}
-	*/
+	conn, err := grpc.DialContext(ctx,
+		"opentelemetry-collector-collector.opentelemetry.svc.cluster.local:4318",
+		grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 
-	conn, err := grpc.DialContext(ctx, 
-		"opentelemetry-collector-collector.opentelemetry.svc.cluster.local:4318", 
-		grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()
-	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection to collector: %w", err)
 	}
@@ -152,8 +141,8 @@ func LoggerAndCreateSpan(c *gin.Context, msg string) trace.Span {
 		zap.String("errors", c.Errors.ByType(gin.ErrorTypePrivate).String()),
 		zap.Duration("elapsed", time.Since(start)),
 		zap.String("message", msg),
-		zap.String("span_id", TraceId),
-		zap.String("trace_id", SpanId),
+		zap.String("span_id", SpanId),
+		zap.String("trace_id", TraceId),
 	)
 
 	return span
