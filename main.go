@@ -125,7 +125,7 @@ func LoggerAndCreateSpan(c *gin.Context, msg string) trace.Span {
 	)
 
 	start := time.Now()
-	logger, err := zap.NewDevelopment()
+	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatal(err)
 	}
