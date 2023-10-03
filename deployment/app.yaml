@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sample
+spec:
+  containers:
+  - name: sample
+    image: ghcr.io/keisukesakasai/otel-sample-app-zenn:latest
